@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Badge } from "../../ui/Badge";
 import { ToolButton } from "../../ui/ToolButton";
+import { LoadingBar } from "../../ui/LoadingBar";
 import { Icon } from "../../ui/Icon";
 import { SortTh } from "../../ui/SortTh";
 import { useSortedRows } from "../../lib/useSort";
@@ -256,7 +257,7 @@ export function KeysView({ active }: { active: boolean }) {
               : `${rows.length}${cursor && cursor !== "0" ? "+" : ""} / ${formatDocCount(dbTotal)} keys`
             : "no connection"}
         </Badge>
-        <div className={`req-progress ${scanning ? "on" : ""}`}><span /></div>
+        <LoadingBar active={scanning} />
       </div>
       <div className="index-table-wrap">
         {!conn && <div className="empty-note">Connect to a server to browse keys.</div>}
