@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { isThemeId, themeBase } from "./lib/themes";
 import { clampFontSize, DEFAULT_FONT_SIZE } from "./lib/fontScale";
 import type { Connection, KeyMeta, KeyTabState, TabDef, TabKind } from "./lib/types";
+import type { ElemEditor } from "./lib/elemOps";
 
 const TAB_META: Record<TabKind, { title: string; icon: TabDef["icon"]; iconClass: string }> = {
   welcome: { title: "Welcome", icon: "sparkles", iconClass: "soft-blue" },
@@ -89,6 +90,10 @@ interface AppState {
   keyRecency: string[];
   /** key selected in a Keys tab — its metadata shows in the right-dock inspector */
   selectedKey: KeyMeta | null;
+  /** collection element being edited — opened from a key tab, rendered in the right-dock inspector */
+  elemEditor: ElemEditor | null;
+  /** bumped after the inspector mutates an element — key tabs reload their element list */
+  elemMutateNonce: number;
   /** connection being edited in the Connection tab (null = new draft) */
   editingConnId: string | null;
 
@@ -124,6 +129,8 @@ interface AppState {
 
   bumpKeyRecency: (key: string) => void;
   selectKey: (meta: KeyMeta | null) => void;
+  setElemEditor: (e: ElemEditor | null) => void;
+  bumpElemMutate: () => void;
   setEditingConn: (id: string | null) => void;
   setTheme: (id: string) => void;
 
@@ -165,6 +172,8 @@ export const useApp = create<AppState>((set, get) => ({
 
   keyRecency: [],
   selectedKey: null,
+  elemEditor: null,
+  elemMutateNonce: 0,
   editingConnId: null,
 
   // default = Bearded Arc (shared with elatic_min/requests_min); invalid stored themes fall back
@@ -203,10 +212,11 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({
       activeConnId: id,
       selectedKey: null,
+      elemEditor: null,
       keyRecency: [],
       activeDb: s.connections.find((c) => c.id === id)?.db ?? 0,
     })),
-  setActiveDb: (db) => set({ activeDb: db, selectedKey: null }),
+  setActiveDb: (db) => set({ activeDb: db, selectedKey: null, elemEditor: null }),
 
   openTab: (kind) => {
     const s = get();
@@ -295,6 +305,8 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({ keyRecency: [key, ...s.keyRecency.filter((k) => k !== key)].slice(0, 50) })),
   // auto show/hide the right-dock inspector with what's selected
   selectKey: (meta) => set({ selectedKey: meta, rightCollapsed: meta === null }),
+  setElemEditor: (e) => set((s) => ({ elemEditor: e, rightCollapsed: e ? false : s.rightCollapsed })),
+  bumpElemMutate: () => set((s) => ({ elemMutateNonce: s.elemMutateNonce + 1 })),
   setEditingConn: (id) => set({ editingConnId: id }),
   setTheme: (id) => {
     localStorage.setItem("redismin:theme-v2", id);

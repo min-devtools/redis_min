@@ -313,14 +313,30 @@ export function InfoView({ active }: { active: boolean }) {
       )}
 
       {conn && pane === "raw" && (
-        <div className="cluster-main">
-          {Object.entries(info.data ?? {}).map(([section, fields]) => (
-            <Panel key={section} title={section} style={{ marginBottom: 14 }}>
-              {Object.entries(fields).map(([k, v]) => (
-                <Kv key={k} label={k}>{v}</Kv>
-              ))}
-            </Panel>
-          ))}
+        <div className="index-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 320 }}>Field</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(info.data ?? {}).flatMap(([section, fields]) => [
+                <tr key={`#${section}`}>
+                  <td colSpan={2} style={{ color: "var(--text-3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", background: "var(--pane)" }}>
+                    {section}
+                  </td>
+                </tr>,
+                ...Object.entries(fields).map(([k, v]) => (
+                  <tr key={`${section}:${k}`}>
+                    <td style={{ fontFamily: "var(--font-mono)" }}>{k}</td>
+                    <td style={{ fontFamily: "var(--font-mono)", maxWidth: 480, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v}</td>
+                  </tr>
+                )),
+              ])}
+            </tbody>
+          </table>
         </div>
       )}
     </section>

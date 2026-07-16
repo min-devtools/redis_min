@@ -1,7 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useApp } from "../store";
 import { useActiveConnection, useDatabases, useServerInfo } from "../lib/queries";
-import { version } from "../../package.json";
 
 export function Statusbar() {
   const conn = useActiveConnection();
@@ -53,7 +52,7 @@ export function Statusbar() {
         <span>{mem ? `mem ${mem}` : ""}</span>
         <span>{clients ? `${clients} clients` : ""}</span>
         <span>{activeTab?.title ?? ""}</span>
-        <span>v{version}</span>
+        <span>v{__APP_VERSION__}</span>
         <span
           className="credit"
           style={{ cursor: "pointer" }}

@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use redis::aio::MultiplexedConnection;
+use redis::aio::{ConnectionLike, MultiplexedConnection};
 use serde::Deserialize;
 use serde_json::{json, Value as Json};
 use tauri::{AppHandle, Emitter, State};
@@ -164,8 +164,32 @@ async fn redis_cmd(
     }
 }
 
-/// Run many commands over one connection, one result per command (errors inline
-/// as `{"err": …}` — a failed TYPE probe must not sink the whole page of keys).
+/// Send many commands as one RESP pipeline (single round trip), one result per
+/// command — server errors come back inline as `{"err": …}` (a failed TYPE
+/// probe must not sink the whole page of keys).
+async fn pipeline_exec(c: &mut MultiplexedConnection, cmds: &[Vec<String>]) -> Result<Vec<Json>, String> {
+    let mut pipe = redis::pipe();
+    for parts in cmds {
+        if parts.is_empty() {
+            return Err("empty command".into());
+        }
+        pipe.add_command(build_cmd(parts));
+    }
+    // req_packed_commands (not query_async) keeps per-command errors as
+    // Value::ServerError instead of failing the whole batch
+    let values = c
+        .req_packed_commands(&pipe, 0, cmds.len())
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(values
+        .into_iter()
+        .map(|v| match v {
+            redis::Value::ServerError(e) => json!({ "err": redis::RedisError::from(e).to_string() }),
+            v => json!({ "ok": value_to_json(v) }),
+        })
+        .collect())
+}
+
 #[tauri::command]
 async fn redis_pipeline(
     cache: State<'_, ConnCache>,
@@ -175,21 +199,7 @@ async fn redis_pipeline(
     cmds: Vec<Vec<String>>,
 ) -> Result<Vec<Json>, String> {
     let mut c = get_conn(&cache, &conn, &conn_id, db).await?;
-    let mut out = Vec::with_capacity(cmds.len());
-    for parts in &cmds {
-        if parts.is_empty() {
-            out.push(json!({ "err": "empty command" }));
-            continue;
-        }
-        // ponytail: sequential awaits on one multiplexed conn, not a true RESP
-        // pipeline — swap to redis::pipe() if key pages ever feel slow
-        match build_cmd(parts).query_async::<redis::Value>(&mut c).await {
-            Ok(v) => out.push(json!({ "ok": value_to_json(v) })),
-            Err(e) if e.is_io_error() || e.is_connection_dropped() => return Err(e.to_string()),
-            Err(e) => out.push(json!({ "err": e.to_string() })),
-        }
-    }
-    Ok(out)
+    pipeline_exec(&mut c, &cmds).await
 }
 
 #[tauri::command]
@@ -432,6 +442,20 @@ mod tests {
             .query_async::<redis::Value>(&mut c)
             .await;
         assert!(err.is_err());
+        // pipeline: one round trip, per-command errors inline
+        let out = pipeline_exec(
+            &mut c,
+            &[
+                vec!["TYPE".into(), key.into()],
+                vec!["LPUSH".into(), key.into(), "x".into()], // wrong type → inline err
+                vec!["TTL".into(), key.into()],
+            ],
+        )
+        .await
+        .unwrap();
+        assert_eq!(out[0], json!({ "ok": "string" }));
+        assert!(out[1]["err"].is_string());
+        assert_eq!(out[2], json!({ "ok": -1 }));
         assert_eq!(run(vec!["DEL", key, "__redismin_test_h__"]).await.unwrap(), json!(2));
     }
 }

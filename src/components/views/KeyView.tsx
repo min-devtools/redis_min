@@ -9,6 +9,7 @@ import { FormRow } from "../../ui/FormRow";
 import { useApp } from "../../store";
 import { useActiveConnection } from "../../lib/queries";
 import { exec, execRaw, keyMeta } from "../../lib/redis";
+import { deleteElem } from "../../lib/elemOps";
 import { formatTtl, typeTone } from "../../lib/keyFormat";
 import { formatBytes } from "../../lib/format";
 import type { KeyMeta } from "../../lib/types";
@@ -21,15 +22,6 @@ interface Elem {
   a: string;
   /** hash: value · list: value · zset: score · stream: fields as JSON */
   b: string;
-}
-
-interface EditorState {
-  /** "edit" targets an existing element, "new" appends */
-  mode: "edit" | "new";
-  a: string;
-  b: string;
-  /** original `a` for renames (set members, hash fields) */
-  origA?: string;
 }
 
 const looksJson = (s: string) => {
@@ -52,6 +44,7 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
   const queryClient = useQueryClient();
   const {
     keyTabs, activeDb, showToast, openDialog, closeTab, setKeyTabKey, selectKey, bumpKeyRecency,
+    elemEditor, setElemEditor, elemMutateNonce,
   } = useApp();
   const tabState = keyTabs[tabId];
   const key = tabState?.key ?? "";
@@ -68,7 +61,6 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
   const [elems, setElems] = useState<Elem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null); // HSCAN/SSCAN cursor, list start index, stream boundary id
   const [filter, setFilter] = useState("");
-  const [editor, setEditor] = useState<EditorState | null>(null);
 
   // create-mode draft
   const [draft, setDraft] = useState({ name: "", type: "string", ttl: "", a: "", b: "" });
@@ -155,7 +147,6 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
   const reload = useCallback(async () => {
     if (!conn || !key || createMode) return;
     setLoading(true);
-    setEditor(null);
     try {
       const m = await loadMeta();
       if (m) {
@@ -188,6 +179,16 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runNonce, active]);
 
+  // the inspector saved/removed an element of this key — refresh the element list
+  const prevElemNonce = useRef(elemMutateNonce);
+  useEffect(() => {
+    if (elemMutateNonce !== prevElemNonce.current) {
+      prevElemNonce.current = elemMutateNonce;
+      void reload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elemMutateNonce]);
+
   const afterMutate = async () => {
     await reload();
     void queryClient.invalidateQueries({ queryKey: ["server-info"] });
@@ -213,58 +214,11 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
     }
   };
 
-  const saveElem = async () => {
-    if (!conn || !editor) return;
-    const { mode, a, b, origA } = editor;
-    try {
-      if (type === "hash") {
-        if (!a.trim()) return showToast("Field required", "Enter a field name.", "warn");
-        if (mode === "edit" && origA !== undefined && origA !== a) await exec(conn, activeDb, ["HDEL", key, origA]);
-        await exec(conn, activeDb, ["HSET", key, a, b]);
-      } else if (type === "list") {
-        if (mode === "edit") await exec(conn, activeDb, ["LSET", key, a, b]);
-        else await exec(conn, activeDb, [a === "head" ? "LPUSH" : "RPUSH", key, b]);
-      } else if (type === "set") {
-        if (mode === "edit" && origA !== undefined && origA !== a) await exec(conn, activeDb, ["SREM", key, origA]);
-        await exec(conn, activeDb, ["SADD", key, a || b]);
-      } else if (type === "zset") {
-        const score = Number(b);
-        if (!Number.isFinite(score)) return showToast("Score required", "Enter a numeric score.", "warn");
-        if (mode === "edit" && origA !== undefined && origA !== a) await exec(conn, activeDb, ["ZREM", key, origA]);
-        await exec(conn, activeDb, ["ZADD", key, String(score), a]);
-      } else if (type === "stream") {
-        let obj: Record<string, unknown>;
-        try {
-          obj = JSON.parse(b);
-        } catch {
-          return showToast("Invalid JSON", "Stream entries are added from a JSON object of fields.", "warn");
-        }
-        const args = Object.entries(obj).flatMap(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]);
-        if (!args.length) return showToast("Empty entry", "Add at least one field.", "warn");
-        await exec(conn, activeDb, ["XADD", key, a.trim() || "*", ...args]);
-      }
-      setEditor(null);
-      await afterMutate();
-      showToast("Saved", key);
-    } catch (err) {
-      showToast("Save failed", String(err), "err");
-    }
-  };
-
-  const deleteElem = async (el: Elem) => {
+  const removeElem = async (el: Elem) => {
     if (!conn) return;
     try {
-      if (type === "hash") await exec(conn, activeDb, ["HDEL", key, el.a]);
-      else if (type === "set") await exec(conn, activeDb, ["SREM", key, el.a]);
-      else if (type === "zset") await exec(conn, activeDb, ["ZREM", key, el.a]);
-      else if (type === "stream") await exec(conn, activeDb, ["XDEL", key, el.a]);
-      else if (type === "list") {
-        // LSET sentinel + LREM — the standard remove-by-index trick
-        const sentinel = "__redismin_deleted__";
-        await exec(conn, activeDb, ["LSET", key, el.a, sentinel]);
-        await exec(conn, activeDb, ["LREM", key, "1", sentinel]);
-      }
-      setEditor(null);
+      await deleteElem(conn, activeDb, key, type, el.a);
+      if (elemEditor?.key === key && elemEditor.origA === el.a) setElemEditor(null);
       await afterMutate();
       showToast("Removed", `${el.a} · ${key}`);
     } catch (err) {
@@ -458,7 +412,6 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
   const q = filter.trim().toLowerCase();
   const shownElems = q ? elems.filter((e) => e.a.toLowerCase().includes(q) || e.b.toLowerCase().includes(q)) : elems;
   const isCollection = ["hash", "list", "set", "zset", "stream"].includes(type);
-  const canEditElem = type !== "stream";
 
   const elemCols =
     type === "hash" ? ["Field", "Value"] :
@@ -513,11 +466,11 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
       )}
 
       {isCollection && (
-        <div className="docs-split" style={{ gridTemplateColumns: editor ? "minmax(0, 1fr) minmax(320px, 420px)" : "minmax(0, 1fr)" }}>
+        <div className="docs-split" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
           <div className="docs-left" style={{ display: "grid", gridTemplateRows: "44px minmax(0, 1fr) auto" }}>
             <div className="index-searchbar" style={{ gridTemplateColumns: "minmax(180px, 1fr) auto auto" }}>
               <input className="index-search" placeholder="Filter loaded items" value={filter} onChange={(e) => setFilter(e.target.value)} />
-              <ToolButton onClick={() => setEditor({ mode: "new", a: type === "list" ? "tail" : "", b: type === "stream" ? "{\n  \n}" : "" })}>
+              <ToolButton onClick={() => setElemEditor({ key, type, mode: "new", a: type === "list" ? "tail" : "", b: type === "stream" ? "{\n  \n}" : "" })}>
                 <Icon name="plus" /> Add
               </ToolButton>
               <Badge>{`${shownElems.length}${cursor && cursor !== "0" ? "+" : ""} / ${meta?.length ?? "?"}`}</Badge>
@@ -535,16 +488,16 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
                   {shownElems.map((el, i) => (
                     <tr
                       key={`${el.a}-${i}`}
-                      className={editor?.mode === "edit" && editor.origA === el.a ? "selected" : ""}
+                      className={elemEditor?.key === key && elemEditor.mode === "edit" && elemEditor.origA === el.a ? "selected" : ""}
                       onClick={() =>
-                        canEditElem
-                          ? setEditor({
-                              mode: "edit",
-                              a: el.a,
-                              b: type === "set" ? el.a : looksJson(el.b) ? tryPretty(el.b) : el.b,
-                              origA: el.a,
-                            })
-                          : setEditor({ mode: "edit", a: el.a, b: tryPretty(el.b), origA: el.a })
+                        setElemEditor({
+                          key,
+                          type,
+                          mode: "edit",
+                          a: el.a,
+                          b: type === "set" ? el.a : looksJson(el.b) ? tryPretty(el.b) : el.b,
+                          origA: el.a,
+                        })
                       }
                     >
                       <td style={{ fontFamily: "var(--font-mono)", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{el.a}</td>
@@ -559,7 +512,7 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
                           title="Remove"
                           onClick={(e) => {
                             e.stopPropagation();
-                            void deleteElem(el);
+                            void removeElem(el);
                           }}
                         >
                           ×
@@ -581,68 +534,6 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
               )}
             </div>
           </div>
-
-          {editor && (
-            <div className="doc-context-panel" style={{ gridTemplateRows: "auto minmax(0, 1fr) auto" }}>
-              <div className="docs-preview-head" style={{ minHeight: 42 }}>
-                <strong>{editor.mode === "new" ? `Add ${type === "hash" ? "field" : type === "stream" ? "entry" : "item"}` : "Edit"}</strong>
-                <ToolButton iconOnly title="Close" onClick={() => setEditor(null)}><Icon name="x" /></ToolButton>
-              </div>
-              <div className="doc-context-body">
-                {type === "hash" && (
-                  <FormRow label="Field">
-                    <input value={editor.a} spellCheck={false} onChange={(e) => setEditor({ ...editor, a: e.target.value })} />
-                  </FormRow>
-                )}
-                {type === "zset" && (
-                  <>
-                    <FormRow label="Member">
-                      <input value={editor.a} spellCheck={false} onChange={(e) => setEditor({ ...editor, a: e.target.value })} />
-                    </FormRow>
-                    <FormRow label="Score">
-                      <input value={editor.b} onChange={(e) => setEditor({ ...editor, b: e.target.value })} />
-                    </FormRow>
-                  </>
-                )}
-                {type === "list" && editor.mode === "new" && (
-                  <FormRow label="Push to">
-                    <select value={editor.a} onChange={(e) => setEditor({ ...editor, a: e.target.value })}>
-                      <option value="tail">tail (RPUSH)</option>
-                      <option value="head">head (LPUSH)</option>
-                    </select>
-                  </FormRow>
-                )}
-                {type === "stream" && editor.mode === "new" && (
-                  <FormRow label="Entry ID">
-                    <input value={editor.a} placeholder="* (auto)" spellCheck={false} onChange={(e) => setEditor({ ...editor, a: e.target.value })} />
-                  </FormRow>
-                )}
-                {type !== "zset" && (
-                  <CodeInput
-                    value={type === "set" ? editor.a : editor.b}
-                    onChange={(v) => setEditor(type === "set" ? { ...editor, a: v } : { ...editor, b: v })}
-                    height={240}
-                    language={type === "stream" || looksJson(type === "set" ? editor.a : editor.b) ? "json" : "plaintext"}
-                  />
-                )}
-                {type === "stream" && editor.mode === "edit" && (
-                  <div className="empty-note">Stream entries are immutable — delete and re-add to change one.</div>
-                )}
-              </div>
-              <div className="docs-preview-foot" style={{ padding: "8px 12px", gap: 8, display: "flex", justifyContent: "flex-end" }}>
-                {editor.mode === "edit" && canEditElem && (
-                  <ToolButton onClick={() => void deleteElem({ a: editor.origA ?? editor.a, b: editor.b })}>
-                    <Icon name="trash" /> Remove
-                  </ToolButton>
-                )}
-                {(editor.mode === "new" || canEditElem) && (
-                  <ToolButton variant="primary" onClick={() => void saveElem()}>
-                    <Icon name="save" /> Save
-                  </ToolButton>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
 

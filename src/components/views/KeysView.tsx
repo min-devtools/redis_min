@@ -50,7 +50,10 @@ export function KeysView({ active }: { active: boolean }) {
       // append each SCAN batch to the table as it arrives (progressive paging)
       let fetched = 0;
       do {
-        const page = await scanKeys(conn, activeDb, cur, pattern, PAGE_COUNT, typeFilter || undefined);
+        // filtered scans sweep more slots per round trip — MATCH/TYPE discard
+        // most of them server-side, so COUNT 100 would mean hundreds of trips
+        const count = pattern || typeFilter ? 1000 : PAGE_COUNT;
+        const page = await scanKeys(conn, activeDb, cur, pattern, count, typeFilter || undefined);
         cur = page.cursor;
         if (page.keys.length) {
           const annotated = await annotateKeys(conn, activeDb, page.keys);
