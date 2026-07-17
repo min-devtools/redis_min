@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Titlebar } from "./components/Titlebar";
 import { Sidebar } from "./components/Sidebar";
 import { TabsBar } from "./components/TabsBar";
@@ -42,7 +43,12 @@ export default function App() {
   const {
     tabs, activeTabId, theme, compact, leftCollapsed, rightCollapsed,
     toggleLeft, toggleRight, setCommandOpen, openKeyTab,
-  } = useApp();
+  } = useApp(useShallow((s) => ({
+    tabs: s.tabs, activeTabId: s.activeTabId, theme: s.theme, compact: s.compact,
+    leftCollapsed: s.leftCollapsed, rightCollapsed: s.rightCollapsed,
+    toggleLeft: s.toggleLeft, toggleRight: s.toggleRight,
+    setCommandOpen: s.setCommandOpen, openKeyTab: s.openKeyTab,
+  })));
 
   const inspectorOk = useApp((s) => inspectorAvailable(s));
   const uiFont = useApp((s) => s.uiFont);

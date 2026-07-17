@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { ToolButton } from "../../ui/ToolButton";
 import { Badge } from "../../ui/Badge";
 import { Icon } from "../../ui/Icon";
@@ -22,9 +23,22 @@ function loadHistory(): string[] {
 
 let entrySeq = 0;
 
+/** Commands that switch the connection into a streaming mode — they would
+ * hijack the multiplexed connection shared by every view. */
+const STREAMING_HINT: Record<string, string> = {
+  SUBSCRIBE: "use the Pub/Sub tab",
+  PSUBSCRIBE: "use the Pub/Sub tab",
+  SSUBSCRIBE: "use the Pub/Sub tab",
+  UNSUBSCRIBE: "use the Pub/Sub tab",
+  PUNSUBSCRIBE: "use the Pub/Sub tab",
+  MONITOR: "use the Monitor tab",
+};
+
 export function ConsoleView({ active }: { active: boolean }) {
   const conn = useActiveConnection();
-  const { activeDb, setActiveDb, showToast, openDialog } = useApp();
+  const { activeDb, setActiveDb, showToast, openDialog } = useApp(useShallow((s) => ({
+    activeDb: s.activeDb, setActiveDb: s.setActiveDb, showToast: s.showToast, openDialog: s.openDialog,
+  })));
   const [entries, setEntries] = useState<ConsoleEntry[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -109,6 +123,14 @@ export function ConsoleView({ active }: { active: boolean }) {
       return;
     }
     const name = args[0].toUpperCase();
+    const hint = STREAMING_HINT[name];
+    if (hint) {
+      setEntries((es) => [...es.slice(-500), {
+        id: ++entrySeq, db, input: trimmed, ms: 0,
+        err: `${name} would take over the shared connection — ${hint} instead`,
+      }]);
+      return;
+    }
     if (DANGEROUS_COMMANDS.has(name)) {
       const ok = await openDialog({
         kind: "confirm",
@@ -124,7 +146,11 @@ export function ConsoleView({ active }: { active: boolean }) {
     try {
       const r = await execRaw(conn, db, args);
       const ms = Math.max(1, Math.round(performance.now() - started));
-      setEntries((es) => [...es.slice(-500), { id: ++entrySeq, db, input: trimmed, ok: r.ok, err: r.err, ms }]);
+      // format once here — formatResp per entry on every render made typing lag
+      setEntries((es) => [...es.slice(-500), {
+        id: ++entrySeq, db, input: trimmed, ms,
+        ...(r.err !== undefined ? { err: r.err } : { out: formatResp(r.ok ?? null) }),
+      }]);
       // SELECT switches the console db locally (each command carries its db)
       if (name === "SELECT" && r.err === undefined) {
         const n = Number(args[1]);
@@ -243,7 +269,7 @@ export function ConsoleView({ active }: { active: boolean }) {
               <pre style={{ margin: "2px 0 0", color: "var(--red)", whiteSpace: "pre-wrap" }}>(error) {e.err}</pre>
             ) : (
               <pre style={{ margin: "2px 0 0", color: "var(--editor-fg)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                {formatResp(e.ok ?? null)}
+                {e.out}
               </pre>
             )}
           </div>

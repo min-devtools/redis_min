@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { useShallow } from "zustand/react/shallow";
 import { ToolButton } from "../ui/ToolButton";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
@@ -10,9 +11,14 @@ import { themeBase } from "../lib/themes";
 export function Titlebar() {
   const conn = useActiveConnection();
   const info = useServerInfo();
-  const { toggleTheme, toggleCompact, setCommandOpen, showToast, theme, openTab, runActive, tabs, activeTabId } = useApp();
+  const { toggleTheme, toggleCompact, setCommandOpen, showToast, theme, openTab, runActive, activeKind } = useApp(
+    useShallow((s) => ({
+      toggleTheme: s.toggleTheme, toggleCompact: s.toggleCompact, setCommandOpen: s.setCommandOpen,
+      showToast: s.showToast, theme: s.theme, openTab: s.openTab, runActive: s.runActive,
+      activeKind: s.tabs.find((t) => t.id === s.activeTabId)?.kind,
+    })),
+  );
   const queryClient = useQueryClient();
-  const activeKind = tabs.find((t) => t.id === activeTabId)?.kind;
   const activeRunnable = activeKind === "keys" || activeKind === "console" || activeKind === "key";
 
   const version = info.data?.server?.redis_version;

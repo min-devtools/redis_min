@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useApp } from "../store";
 import { useDatabases } from "../lib/queries";
 import { Icon, type IconName } from "../ui/Icon";
@@ -15,7 +16,13 @@ export function CommandPalette() {
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const { dbs } = useDatabases();
-  const app = useApp();
+  const app = useApp(useShallow((s) => ({
+    commandOpen: s.commandOpen, setCommandOpen: s.setCommandOpen,
+    connections: s.connections, keyRecency: s.keyRecency,
+    openTab: s.openTab, openKeyTab: s.openKeyTab, setEditingConn: s.setEditingConn,
+    setActiveConn: s.setActiveConn, setActiveDb: s.setActiveDb,
+    toggleLeft: s.toggleLeft, toggleRight: s.toggleRight, toggleTheme: s.toggleTheme, toggleCompact: s.toggleCompact,
+  })));
 
   useEffect(() => {
     if (app.commandOpen) {

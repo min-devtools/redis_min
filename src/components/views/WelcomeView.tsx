@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { ToolButton } from "../../ui/ToolButton";
 import { Icon, type IconName } from "../../ui/Icon";
 import { useApp } from "../../store";
@@ -5,7 +6,9 @@ import { useActiveConnection } from "../../lib/queries";
 
 export function WelcomeView({ active }: { active: boolean }) {
   const conn = useActiveConnection();
-  const { openTab, setEditingConn, openKeyTab } = useApp();
+  const { openTab, setEditingConn, openKeyTab } = useApp(
+    useShallow((s) => ({ openTab: s.openTab, setEditingConn: s.setEditingConn, openKeyTab: s.openKeyTab })),
+  );
 
   const newConnection = () => {
     setEditingConn(null);

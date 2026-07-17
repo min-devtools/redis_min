@@ -31,17 +31,17 @@ export interface KeyMeta extends KeyRow {
   length: number | null;
 }
 
+/** batched stream event from the backend — items are flushed every ~60ms */
+export interface StreamBatch<T> {
+  id: string;
+  items: T[];
+}
+
 export interface PubSubMsg {
-  subId: string;
   channel: string;
   pattern: string | null;
   payload: string;
   ts: number;
-}
-
-export interface MonitorEvent {
-  monitorId: string;
-  line: string;
 }
 
 /** One console interaction: the command line and its rendered result. */
@@ -49,8 +49,8 @@ export interface ConsoleEntry {
   id: number;
   db: number;
   input: string;
-  /** RESP value converted to JSON (null = nil) */
-  ok?: unknown;
+  /** result pre-rendered with formatResp at push time (absent when err) */
+  out?: string;
   err?: string;
   /** round-trip in ms */
   ms: number;

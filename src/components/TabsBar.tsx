@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useApp } from "../store";
 import { ContextMenu } from "../ui/ContextMenu";
 import { Icon } from "../ui/Icon";
 
 export function TabsBar() {
-  const { tabs, activeTabId, activateTab, closeTab, openKeyTab, renameTab, reorderTab } = useApp();
+  const { tabs, activeTabId, activateTab, closeTab, openKeyTab, renameTab, reorderTab } = useApp(
+    useShallow((s) => ({
+      tabs: s.tabs, activeTabId: s.activeTabId, activateTab: s.activateTab, closeTab: s.closeTab,
+      openKeyTab: s.openKeyTab, renameTab: s.renameTab, reorderTab: s.reorderTab,
+    })),
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);

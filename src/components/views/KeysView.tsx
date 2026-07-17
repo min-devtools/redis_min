@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useQueryClient } from "@tanstack/react-query";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Badge } from "../../ui/Badge";
@@ -24,7 +25,10 @@ export function KeysView({ active }: { active: boolean }) {
   const queryClient = useQueryClient();
   const {
     activeDb, openKeyTab, selectKey, selectedKey, showToast, openDialog, bumpKeyRecency,
-  } = useApp();
+  } = useApp(useShallow((s) => ({
+    activeDb: s.activeDb, openKeyTab: s.openKeyTab, selectKey: s.selectKey, selectedKey: s.selectedKey,
+    showToast: s.showToast, openDialog: s.openDialog, bumpKeyRecency: s.bumpKeyRecency,
+  })));
 
   const [pattern, setPattern] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
@@ -39,8 +43,9 @@ export function KeysView({ active }: { active: boolean }) {
   const dbTotal = dbs.find((d) => d.db === activeDb)?.keys ?? 0;
 
   const runScan = async (reset: boolean, all = false) => {
-    if (!conn || scanning) return;
-    const seq = ++scanSeq.current;
+    if (!conn) return;
+    if (!reset && scanning) return; // load-more taps while a scan runs
+    const seq = ++scanSeq.current; // a reset scan supersedes any in-flight one
     setScanning(true);
     try {
       let cur = reset ? "0" : cursor ?? "0";
@@ -54,10 +59,11 @@ export function KeysView({ active }: { active: boolean }) {
         // most of them server-side, so COUNT 100 would mean hundreds of trips
         const count = pattern || typeFilter ? 1000 : PAGE_COUNT;
         const page = await scanKeys(conn, activeDb, cur, pattern, count, typeFilter || undefined);
+        if (seq !== scanSeq.current) return; // superseded by a newer scan
         cur = page.cursor;
         if (page.keys.length) {
           const annotated = await annotateKeys(conn, activeDb, page.keys);
-          if (seq !== scanSeq.current) return; // superseded by a newer scan
+          if (seq !== scanSeq.current) return;
           const fresh = annotated.filter((r) => !seen.has(r.key));
           fresh.forEach((r) => seen.add(r.key));
           if (fresh.length) setRows((prev) => [...prev, ...fresh]);
@@ -74,9 +80,11 @@ export function KeysView({ active }: { active: boolean }) {
 
   // first page on mount / connection / db switch; re-scan on pattern or type change (debounced)
   useEffect(() => {
-    if (!conn) return;
+    scanSeq.current++; // kill any in-flight scan for the previous pattern/db
+    setScanning(false);
     setRows([]);
     setCursor(null);
+    if (!conn) return;
     const t = window.setTimeout(() => void runScan(true), pattern ? 250 : 0);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,7 +167,8 @@ export function KeysView({ active }: { active: boolean }) {
         const page = await scanKeys(conn, activeDb, cur, `${prefix}*`, 1000);
         cur = page.cursor;
         if (page.keys.length) {
-          await exec(conn, activeDb, ["DEL", ...page.keys]);
+          // UNLINK reclaims memory off-thread — DEL of a big namespace blocks the server
+          await exec(conn, activeDb, ["UNLINK", ...page.keys]);
           deleted += page.keys.length;
         }
       } while (cur !== "0");

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "../ui/Badge";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
@@ -31,7 +32,12 @@ export function Sidebar() {
     setConnections,
     tabs, activeTabId, openTab, activeDb, setActiveDb, showToast,
     openKeyTab, keyRecency,
-  } = useApp();
+  } = useApp(useShallow((s) => ({
+    connections: s.connections, activeConnId: s.activeConnId, setActiveConn: s.setActiveConn,
+    deleteConnection: s.deleteConnection, setEditingConn: s.setEditingConn, setConnections: s.setConnections,
+    tabs: s.tabs, activeTabId: s.activeTabId, openTab: s.openTab, activeDb: s.activeDb,
+    setActiveDb: s.setActiveDb, showToast: s.showToast, openKeyTab: s.openKeyTab, keyRecency: s.keyRecency,
+  })));
   // drag-reorder state for the Connections group — pattern matches TabsBar / requests_min
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; before: boolean } | null>(null);

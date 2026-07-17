@@ -6,13 +6,13 @@ import { Icon } from "../../ui/Icon";
 import { useApp } from "../../store";
 import { useActiveConnection } from "../../lib/queries";
 import { exec, streamStop, subscribeStart } from "../../lib/redis";
-import type { PubSubMsg } from "../../lib/types";
+import type { PubSubMsg, StreamBatch } from "../../lib/types";
 
 const MSG_CAP = 5000;
 
 export function PubSubView({ active }: { active: boolean }) {
   const conn = useActiveConnection();
-  const { showToast } = useApp();
+  const showToast = useApp((s) => s.showToast);
   const [channels, setChannels] = useState("");
   const [patterns, setPatterns] = useState("");
   const [subId, setSubId] = useState<string | null>(null);
@@ -28,9 +28,9 @@ export function PubSubView({ active }: { active: boolean }) {
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
-    void listen<PubSubMsg>("redis-pubsub-message", (e) => {
-      if (e.payload.subId !== subRef.current || pausedRef.current) return;
-      setMessages((ms) => [...ms.slice(-MSG_CAP), e.payload]);
+    void listen<StreamBatch<PubSubMsg>>("redis-pubsub-batch", (e) => {
+      if (e.payload.id !== subRef.current || pausedRef.current) return;
+      setMessages((ms) => [...ms, ...e.payload.items].slice(-MSG_CAP));
     }).then((u) => (unlisten = u));
     return () => {
       unlisten?.();

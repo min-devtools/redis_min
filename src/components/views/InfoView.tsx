@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MiniTabs } from "../../ui/MiniTabs";
 import { Metric, Panel, BarLine } from "../../ui/MetricPanel";
@@ -57,7 +58,7 @@ export function InfoView({ active }: { active: boolean }) {
   const conn = useActiveConnection();
   const info = useServerInfo();
   const queryClient = useQueryClient();
-  const { showToast, openDialog } = useApp();
+  const { showToast, openDialog } = useApp(useShallow((s) => ({ showToast: s.showToast, openDialog: s.openDialog })));
 
   const clients = useQuery({
     queryKey: ["client-list", conn?.id],

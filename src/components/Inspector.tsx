@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Kv } from "../ui/Kv";
@@ -17,7 +18,7 @@ import { formatTtl } from "../lib/keyFormat";
 import type { Connection } from "../lib/types";
 
 /** small, type-appropriate sample of a key's value for the preview pane */
-async function previewValue(conn: any, db: number, key: string, type: string): Promise<unknown> {
+async function previewValue(conn: Connection, db: number, key: string, type: string): Promise<unknown> {
   switch (type) {
     case "string": {
       const v = await exec<string | null>(conn, db, ["GETRANGE", key, "0", "9999"]);
@@ -117,7 +118,7 @@ async function loadFullValue(conn: Connection, db: number, key: string, type: st
 
 const asStr = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v));
 
-/** write the edited draft back — collections are rebuilt atomically-ish (DEL + refill + EXPIRE in one pipeline) */
+/** write the edited draft back — collections are rebuilt atomically (DEL + refill + EXPIRE in one MULTI/EXEC) */
 async function saveFullValue(conn: Connection, db: number, key: string, type: string, draft: string): Promise<void> {
   if (type === "string") {
     // preserve TTL across SET (KEEPTTL, redis ≥ 6)
@@ -146,7 +147,11 @@ async function saveFullValue(conn: Connection, db: number, key: string, type: st
     if (entries.length) cmds.push(["ZADD", key, ...entries.flatMap(([m, s]) => [String(Number(s)), m])]);
   }
   if (ttl > 0) cmds.push(["EXPIRE", key, String(ttl)]);
-  const rs = await pipeline(conn, db, cmds);
+  // MULTI/EXEC so DEL + rebuild commit atomically — the Rust pipeline packs all
+  // commands into one contiguous write on a single connection, and a queue-time
+  // error (OOM, bad arity) EXECABORTs before DEL runs. Replies become
+  // OK, QUEUED×n, then EXEC's array; the err scan below covers all of them.
+  const rs = await pipeline(conn, db, [["MULTI"], ...cmds, ["EXEC"]]);
   const bad = rs.find((r) => r.err !== undefined);
   if (bad) throw new Error(bad.err);
 }
@@ -170,7 +175,12 @@ export function Inspector() {
   const [pane, setPane] = useState("value");
   const [draft, setDraft] = useState("");
   const [original, setOriginal] = useState("");
-  const { selectedKey, showToast, activeDb, selectKey, elemEditor, setElemEditor, bumpElemMutate } = useApp();
+  const { selectedKey, showToast, activeDb, selectKey, elemEditor, setElemEditor, bumpElemMutate } = useApp(
+    useShallow((s) => ({
+      selectedKey: s.selectedKey, showToast: s.showToast, activeDb: s.activeDb, selectKey: s.selectKey,
+      elemEditor: s.elemEditor, setElemEditor: s.setElemEditor, bumpElemMutate: s.bumpElemMutate,
+    })),
+  );
   const conn = useActiveConnection();
   const queryClient = useQueryClient();
 

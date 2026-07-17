@@ -1,4 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useShallow } from "zustand/react/shallow";
 import { useApp } from "../store";
 import { useActiveConnection, useDatabases, useServerInfo } from "../lib/queries";
 
@@ -6,9 +7,12 @@ export function Statusbar() {
   const conn = useActiveConnection();
   const info = useServerInfo();
   const { dbs } = useDatabases();
-  const { tabs, activeTabId, activeDb, openTab, setEditingConn } = useApp();
-
-  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const { activeTitle, activeDb, openTab, setEditingConn } = useApp(
+    useShallow((s) => ({
+      activeTitle: s.tabs.find((t) => t.id === s.activeTabId)?.title,
+      activeDb: s.activeDb, openTab: s.openTab, setEditingConn: s.setEditingConn,
+    })),
+  );
   const statusColor = !conn
     ? "var(--orange)"
     : info.isError
@@ -51,7 +55,7 @@ export function Statusbar() {
       <div className="right-status">
         <span>{mem ? `mem ${mem}` : ""}</span>
         <span>{clients ? `${clients} clients` : ""}</span>
-        <span>{activeTab?.title ?? ""}</span>
+        <span>{activeTitle ?? ""}</span>
         <span>v{__APP_VERSION__}</span>
         <span
           className="credit"

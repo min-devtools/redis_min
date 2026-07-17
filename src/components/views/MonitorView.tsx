@@ -6,13 +6,15 @@ import { Icon } from "../../ui/Icon";
 import { useApp } from "../../store";
 import { useActiveConnection } from "../../lib/queries";
 import { monitorStart, streamStop } from "../../lib/redis";
-import type { MonitorEvent } from "../../lib/types";
+import type { StreamBatch } from "../../lib/types";
 
 const LINE_CAP = 10_000;
+// ponytail: tail-render 1000 of the 10k buffer — virtualize if the full buffer ever needs to be visible
+const TAIL_RENDER = 1_000;
 
 export function MonitorView({ active }: { active: boolean }) {
   const conn = useActiveConnection();
-  const { showToast } = useApp();
+  const showToast = useApp((s) => s.showToast);
   const [monitorId, setMonitorId] = useState<string | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
@@ -25,9 +27,9 @@ export function MonitorView({ active }: { active: boolean }) {
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
-    void listen<MonitorEvent>("redis-monitor-line", (e) => {
-      if (e.payload.monitorId !== idRef.current || pausedRef.current) return;
-      setLines((ls) => [...ls.slice(-LINE_CAP), e.payload.line]);
+    void listen<StreamBatch<string>>("redis-monitor-batch", (e) => {
+      if (e.payload.id !== idRef.current || pausedRef.current) return;
+      setLines((ls) => [...ls, ...e.payload.items].slice(-LINE_CAP));
     }).then((u) => (unlisten = u));
     return () => {
       unlisten?.();
@@ -61,6 +63,7 @@ export function MonitorView({ active }: { active: boolean }) {
 
   const q = filter.trim().toLowerCase();
   const shown = q ? lines.filter((l) => l.toLowerCase().includes(q)) : lines;
+  const tail = shown.slice(-TAIL_RENDER);
 
   return (
     <section className={`content ${active ? "active" : ""}`} style={{ gridTemplateRows: "46px minmax(0, 1fr)", background: "var(--editor-bg)" }}>
@@ -87,7 +90,10 @@ export function MonitorView({ active }: { active: boolean }) {
             {monitorId ? "Waiting for commands…" : "MONITOR streams every command the server executes — useful for debugging, costly under load."}
           </div>
         )}
-        {shown.map((l, i) => (
+        {shown.length > TAIL_RENDER && (
+          <div style={{ color: "var(--text-3)" }}>… {shown.length - TAIL_RENDER} older lines buffered (select-all copies only what is shown)</div>
+        )}
+        {tail.map((l, i) => (
           <div key={i} style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", color: "var(--editor-fg)" }}>{l}</div>
         ))}
       </div>

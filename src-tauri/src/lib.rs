@@ -202,6 +202,48 @@ async fn redis_pipeline(
     pipeline_exec(&mut c, &cmds).await
 }
 
+const FLUSH_EVERY: Duration = Duration::from_millis(60);
+const FLUSH_CAP: usize = 500;
+
+/// Forward a stream to the webview as `{id, items}` batches — one Tauri event
+/// per item floods the IPC bridge (and one React render per line) under
+/// MONITOR load on a busy server.
+fn spawn_batched<S>(
+    app: AppHandle,
+    event: &'static str,
+    id: String,
+    mut stream: S,
+) -> tauri::async_runtime::JoinHandle<()>
+where
+    S: futures_util::Stream<Item = Json> + Unpin + Send + 'static,
+{
+    tauri::async_runtime::spawn(async move {
+        let mut buf: Vec<Json> = Vec::new();
+        let mut tick = tokio::time::interval(FLUSH_EVERY);
+        loop {
+            tokio::select! {
+                item = stream.next() => match item {
+                    Some(v) => {
+                        buf.push(v);
+                        if buf.len() >= FLUSH_CAP {
+                            let _ = app.emit(event, json!({ "id": &id, "items": std::mem::take(&mut buf) }));
+                        }
+                    }
+                    None => break,
+                },
+                _ = tick.tick() => {
+                    if !buf.is_empty() {
+                        let _ = app.emit(event, json!({ "id": &id, "items": std::mem::take(&mut buf) }));
+                    }
+                }
+            }
+        }
+        if !buf.is_empty() {
+            let _ = app.emit(event, json!({ "id": id, "items": buf }));
+        }
+    })
+}
+
 #[tauri::command]
 async fn redis_subscribe_start(
     app: AppHandle,
@@ -219,25 +261,18 @@ async fn redis_subscribe_start(
     for p in &patterns {
         pubsub.psubscribe(p).await.map_err(|e| e.to_string())?;
     }
-    let id = sub_id.clone();
-    let handle = tauri::async_runtime::spawn(async move {
-        let mut stream = pubsub.into_on_message();
-        while let Some(msg) = stream.next().await {
-            let _ = app.emit(
-                "redis-pubsub-message",
-                json!({
-                    "subId": id,
-                    "channel": msg.get_channel_name(),
-                    "pattern": msg.get_pattern::<String>().ok(),
-                    "payload": lossy(msg.get_payload_bytes()),
-                    "ts": std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_millis() as u64)
-                        .unwrap_or(0),
-                }),
-            );
-        }
+    let stream = pubsub.into_on_message().map(|msg| {
+        json!({
+            "channel": msg.get_channel_name(),
+            "pattern": msg.get_pattern::<String>().ok(),
+            "payload": lossy(msg.get_payload_bytes()),
+            "ts": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0),
+        })
     });
+    let handle = spawn_batched(app, "redis-pubsub-batch", sub_id.clone(), stream);
     streams.0.lock().map_err(|e| e.to_string())?.insert(sub_id, handle);
     Ok(())
 }
@@ -252,13 +287,8 @@ async fn redis_monitor_start(
     let client = make_client(&conn, 0)?;
     let mut monitor = client.get_async_monitor().await.map_err(|e| e.to_string())?;
     monitor.monitor().await.map_err(|e| e.to_string())?;
-    let id = monitor_id.clone();
-    let handle = tauri::async_runtime::spawn(async move {
-        let mut stream = monitor.into_on_message::<String>();
-        while let Some(line) = stream.next().await {
-            let _ = app.emit("redis-monitor-line", json!({ "monitorId": id, "line": line }));
-        }
-    });
+    let stream = monitor.into_on_message::<String>().map(|line| json!(line));
+    let handle = spawn_batched(app, "redis-monitor-batch", monitor_id.clone(), stream);
     streams.0.lock().map_err(|e| e.to_string())?.insert(monitor_id, handle);
     Ok(())
 }
@@ -300,6 +330,7 @@ pub fn run() {
         .manage(ConnCache::default())
         .manage(Streams::default())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![

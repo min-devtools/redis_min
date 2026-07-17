@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useQueryClient } from "@tanstack/react-query";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Badge } from "../../ui/Badge";
@@ -45,7 +46,11 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
   const {
     keyTabs, activeDb, showToast, openDialog, closeTab, setKeyTabKey, selectKey, bumpKeyRecency,
     elemEditor, setElemEditor, elemMutateNonce,
-  } = useApp();
+  } = useApp(useShallow((s) => ({
+    keyTabs: s.keyTabs, activeDb: s.activeDb, showToast: s.showToast, openDialog: s.openDialog,
+    closeTab: s.closeTab, setKeyTabKey: s.setKeyTabKey, selectKey: s.selectKey, bumpKeyRecency: s.bumpKeyRecency,
+    elemEditor: s.elemEditor, setElemEditor: s.setElemEditor, elemMutateNonce: s.elemMutateNonce,
+  })));
   const tabState = keyTabs[tabId];
   const key = tabState?.key ?? "";
   const createMode = !!tabState?.create;
