@@ -377,12 +377,12 @@ export function Inspector() {
             <span />
             <span className="seg" style={{ display: "inline-flex", gap: 8 }}>
               {elemEditor.mode === "edit" && elemEditor.type !== "stream" && (
-                <ToolButton onClick={() => void removeElemDraft()}>
+                <ToolButton variant="danger" onClick={() => void removeElemDraft()}>
                   <Icon name="trash" /> Remove
                 </ToolButton>
               )}
               {elemEditor.mode === "edit" && elemEditor.type === "stream" && (
-                <ToolButton onClick={() => void removeElemDraft()}>
+                <ToolButton variant="danger" onClick={() => void removeElemDraft()}>
                   <Icon name="trash" /> Delete entry
                 </ToolButton>
               )}

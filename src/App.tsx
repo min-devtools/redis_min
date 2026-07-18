@@ -129,7 +129,8 @@ export default function App() {
         e.preventDefault();
         useApp.getState().openTab("keys");
       }
-      if (mod && key === "e") {
+      // ⌘⇧C, not ⌘E — ⌘E is reserved app-wide for "rename selected item"
+      if (mod && e.shiftKey && key === "c") {
         e.preventDefault();
         useApp.getState().openTab("console");
       }

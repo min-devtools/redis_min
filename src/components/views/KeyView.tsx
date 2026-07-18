@@ -442,7 +442,7 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
           <ToolButton iconOnly title="Rename key" onClick={() => void renameKey()}><Icon name="pencil" /></ToolButton>
           <ToolButton iconOnly title="Duplicate key (COPY)" onClick={() => void duplicateKey()}><Icon name="copy" /></ToolButton>
           <ToolButton iconOnly title="Copy loaded value as JSON" onClick={() => void copyValue()}><Icon name="docs" /></ToolButton>
-          <ToolButton iconOnly title="Delete key" onClick={() => void deleteKey()}><Icon name="trash" /></ToolButton>
+          <ToolButton iconOnly variant="danger" title="Delete key" onClick={() => void deleteKey()}><Icon name="trash" /></ToolButton>
         </div>
       </div>
 

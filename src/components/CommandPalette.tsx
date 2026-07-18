@@ -35,7 +35,7 @@ export function CommandPalette() {
   const commands = useMemo<Command[]>(() => {
     const base: Command[] = [
       { icon: "key", label: "Browse keys", kbd: "⌘T", action: () => app.openTab("keys") },
-      { icon: "terminal", label: "Open console", kbd: "⌘E", action: () => app.openTab("console") },
+      { icon: "terminal", label: "Open console", kbd: "⌘⇧C", action: () => app.openTab("console") },
       { icon: "plus", label: "New key", kbd: "⌘N", action: () => app.openKeyTab("", true) },
       { icon: "gauge", label: "Server info", kbd: "⌘I", action: () => app.openTab("info") },
       { icon: "radio", label: "Pub/Sub", kbd: "⌘U", action: () => app.openTab("pubsub") },

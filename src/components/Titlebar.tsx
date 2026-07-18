@@ -57,7 +57,7 @@ export function Titlebar() {
         <ToolButton iconOnly title="Browse keys (⌘T)" aria-label="Browse keys" onClick={() => openTab("keys")}>
           <Icon name="key" />
         </ToolButton>
-        <ToolButton iconOnly title="Console (⌘E)" aria-label="Console" onClick={() => openTab("console")}>
+        <ToolButton iconOnly title="Console (⌘⇧C)" aria-label="Console" onClick={() => openTab("console")}>
           <Icon name="terminal" />
         </ToolButton>
         <ToolButton iconOnly title="Server info (⌘I)" aria-label="Server info" onClick={() => openTab("info")}>
