@@ -1,16 +1,15 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useShallow } from "zustand/react/shallow";
 import { useApp } from "../store";
-import { useActiveConnection, useDatabases, useServerInfo } from "../lib/queries";
+import { useActiveConnection, useServerInfo } from "../lib/queries";
 
 export function Statusbar() {
   const conn = useActiveConnection();
   const info = useServerInfo();
-  const { dbs } = useDatabases();
-  const { activeTitle, activeDb, openTab, setEditingConn } = useApp(
+  const { activeTitle, openTab, setEditingConn } = useApp(
     useShallow((s) => ({
       activeTitle: s.tabs.find((t) => t.id === s.activeTabId)?.title,
-      activeDb: s.activeDb, openTab: s.openTab, setEditingConn: s.setEditingConn,
+      openTab: s.openTab, setEditingConn: s.setEditingConn,
     })),
   );
   const statusColor = !conn
@@ -23,7 +22,6 @@ export function Statusbar() {
 
   const mem = info.data?.memory?.used_memory_human;
   const clients = info.data?.clients?.connected_clients;
-  const dbKeys = dbs.find((d) => d.db === activeDb)?.keys ?? 0;
 
   return (
     <footer className="statusbar">
@@ -41,16 +39,6 @@ export function Statusbar() {
         <span style={{ color: statusColor }}>
           {!conn ? "setup required" : info.isError ? "unreachable" : info.data ? "connected" : "connecting…"}
         </span>
-      </div>
-      <div>
-        <span
-          style={{ cursor: "pointer" }}
-          title="Browse keys (⌘T)"
-          onClick={() => openTab("keys")}
-        >
-          db{activeDb}
-        </span>
-        <span>{`${dbKeys} keys`}</span>
       </div>
       <div className="right-status">
         <span>{mem ? `mem ${mem}` : ""}</span>
