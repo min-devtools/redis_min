@@ -5,6 +5,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Badge } from "../../ui/Badge";
 import { ToolButton } from "../../ui/ToolButton";
 import { LoadingBar } from "../../ui/LoadingBar";
+import { SectionVeil } from "../../ui/SectionVeil";
 import { Icon } from "../../ui/Icon";
 import { SortTh } from "../../ui/SortTh";
 import { useSortedRows } from "../../lib/useSort";
@@ -272,6 +273,8 @@ export function KeysView({ active }: { active: boolean }) {
         <LoadingBar active={scanning} />
       </div>
       <div className="index-table-wrap">
+        {/* initial scan only — load-more/appends keep the table visible */}
+        <SectionVeil on={scanning && rows.length === 0} label="Scanning keys…" />
         {!conn && <div className="empty-note">Connect to a server to browse keys.</div>}
         {conn && (
           <table>

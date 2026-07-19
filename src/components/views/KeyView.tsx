@@ -6,6 +6,7 @@ import { Badge } from "../../ui/Badge";
 import { ToolButton } from "../../ui/ToolButton";
 import { Icon } from "../../ui/Icon";
 import { CodeInput } from "../../ui/CodeInput";
+import { SectionVeil } from "../../ui/SectionVeil";
 import { FormRow } from "../../ui/FormRow";
 import { useApp } from "../../store";
 import { useActiveConnection } from "../../lib/queries";
@@ -426,6 +427,8 @@ export function KeyView({ tabId, active }: { tabId: string; active: boolean }) {
 
   return (
     <section className={`content indexes-view ${active ? "active" : ""}`} style={{ gridTemplateRows: "54px minmax(0, 1fr)" }}>
+      {/* initial load only — meta stays set across reloads, so no flash on refetch */}
+      <SectionVeil on={loading && !meta} label="Loading key…" />
       <div className="create-head">
         <div className="doc-title">
           <strong style={{ fontFamily: "var(--font-mono)" }}>{key}</strong>
