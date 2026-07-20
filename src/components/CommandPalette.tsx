@@ -43,7 +43,7 @@ export function CommandPalette() {
     connections: s.connections, keyRecency: s.keyRecency,
     openTab: s.openTab, openKeyTab: s.openKeyTab, setEditingConn: s.setEditingConn,
     setActiveConn: s.setActiveConn, setActiveDb: s.setActiveDb,
-    toggleLeft: s.toggleLeft, toggleRight: s.toggleRight, toggleTheme: s.toggleTheme, toggleCompact: s.toggleCompact,
+    toggleLeft: s.toggleLeft, toggleRight: s.toggleRight, toggleTheme: s.toggleTheme, toggleCompact: s.toggleCompact, vimMode: s.vimMode,
   })));
 
   useEffect(() => {
@@ -149,11 +149,13 @@ export function CommandPalette() {
             setCursor(0);
           }}
           onKeyDown={(e) => {
-            if (e.key === "ArrowDown") {
+            const next = e.key === "Tab" || (app.vimMode && e.ctrlKey && e.key.toLowerCase() === "n");
+            const previous = app.vimMode && e.ctrlKey && e.key.toLowerCase() === "p";
+            if (e.key === "ArrowDown" || next) {
               e.preventDefault();
-              setCursor((c) => Math.min(filtered.length - 1, c + 1));
+              setCursor((c) => Math.min(Math.max(0, filtered.length - 1), c + 1));
             }
-            if (e.key === "ArrowUp") {
+            if (e.key === "ArrowUp" || previous) {
               e.preventDefault();
               setCursor((c) => Math.max(0, c - 1));
             }

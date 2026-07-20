@@ -8,11 +8,14 @@ export async function initPersistence(): Promise<void> {
   try {
     store = await load("redismin.json", { autoSave: true, defaults: {} });
     const connections = (await store.get<Connection[]>("connections")) ?? [];
-    const activeConnId = (await store.get<string | null>("activeConnId")) ?? null;
+    const lastConnId = (await store.get<string | null>("lastConnId")) ?? null;
     useApp.setState({
       connections,
-      activeConnId: connections.some((c) => c.id === activeConnId) ? activeConnId : null,
+      lastConnId: connections.some((c) => c.id === lastConnId) ? lastConnId : null,
     });
+    // connections load after the session is restored, so this is the first chance to drop
+    // restored tabs whose connection has since been deleted
+    useApp.getState().pruneConnTabs();
   } catch (err) {
     console.error("failed to load persisted store", err);
   }
@@ -21,7 +24,7 @@ export async function initPersistence(): Promise<void> {
   useApp.subscribe((s) => {
     if (store) {
       if (s.connections !== prev.connections) void store.set("connections", s.connections);
-      if (s.activeConnId !== prev.activeConnId) void store.set("activeConnId", s.activeConnId);
+      if (s.lastConnId !== prev.lastConnId) void store.set("lastConnId", s.lastConnId);
     }
     // session restore: open tabs (values/results are not persisted)
     if (

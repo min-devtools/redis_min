@@ -1,8 +1,11 @@
 import type { IconName } from "../ui/Icon";
+import type { ConnColor } from "./connColor";
 
 export interface Connection {
   id: string;
   name: string;
+  /** user-assigned identity color, drawn as the dot on every tab bound to this connection */
+  color?: ConnColor;
   host: string;
   port: number;
   username?: string;
@@ -73,6 +76,12 @@ export interface TabDef {
   title: string;
   icon: IconName;
   iconClass: string;
+  /**
+   * Connection this tab is bound to, fixed at creation and never reassigned — a tab
+   * represents one connection for its whole life. Undefined on the global kinds
+   * (welcome/connection/settings), which belong to the app rather than to a server.
+   */
+  connId?: string;
 }
 
 export interface KeyTabState {

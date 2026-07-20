@@ -296,13 +296,7 @@ export function Inspector() {
           {selectedKey && (
             <>
               {preview.isLoading && <div className="empty-note">Loading preview…</div>}
-              {preview.data !== undefined &&
-                (typeof preview.data === "string" ? (
-                  // plain (non-JSON) string — show as text, a JSON tree here reads wrong
-                  <pre className="inspector-text">{preview.data}</pre>
-                ) : (
-                  <JsonView className="create-preview json-tree" value={preview.data ?? null} />
-                ))}
+              {preview.data !== undefined && <JsonView className="create-preview json-tree" value={preview.data ?? null} />}
               <div className="seg" style={{ padding: "8px 12px", gap: 8 }}>
                 <ToolButton onClick={() => setPane("edit")}>
                   <Icon name="braces" /> Edit value

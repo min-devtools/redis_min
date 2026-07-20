@@ -896,3 +896,78 @@ body.light .docs-preview-editor { color: var(--editor-fg); }
   border: 1px solid var(--line);
   border-radius: 9px;
 }
+
+/* Interactive JSON tree viewer (search + collapse/expand) */
+.json-view { position: relative; }
+.json-view-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in oklab, var(--window), var(--app-bg) 3%);
+}
+.json-view-head input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--pane-2);
+  color: var(--text);
+  font: 0.8462rem/1 var(--font-mono);
+  outline: none;
+}
+.json-view-head input:focus {
+  border-color: color-mix(in oklab, var(--blue), transparent 30%);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--blue), transparent 84%);
+}
+.json-view-body,
+.json-view > pre {
+  padding: 10px 12px;
+  color: var(--text-2);
+  font: 0.9231rem/1.7 var(--font-mono);
+  user-select: text;
+  cursor: text;
+}
+.json-tree-line {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  min-height: 1.6em;
+}
+.json-tree-toggle {
+  width: 16px;
+  height: 16px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 0.7rem;
+  cursor: default;
+  padding: 0;
+  flex: none;
+}
+.json-tree-toggle:hover { color: var(--text); }
+.json-tree-toggle.placeholder { visibility: hidden; }
+.json-tree-children {
+  padding-left: 14px;
+  border-left: 1px solid var(--line-2);
+  margin-left: 7px;
+}
+.json-tree-summary {
+  color: var(--text-3);
+  font-style: italic;
+}
+.json-tree-closer { color: var(--text-2); }
+.json-view mark {
+  background: color-mix(in oklab, var(--blue), transparent 72%);
+  color: var(--text);
+  border-radius: 3px;
+  padding: 0 1px;
+}
