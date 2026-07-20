@@ -19,10 +19,16 @@ export function TabsBar() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const activeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (editingId) inputRef.current?.select();
   }, [editingId]);
+
+  // the bar scrolls, so a tab reached by ⌘1-9 / the palette / a close can be off-screen
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activeTabId]);
 
   const commit = () => {
     if (editingId) renameTab(editingId, draft);
@@ -39,6 +45,7 @@ export function TabsBar() {
         return (
         <button
           key={tab.id}
+          ref={tab.id === activeTabId ? activeRef : undefined}
           type="button"
           draggable={!editingId}
           className={`tab ${tab.id === activeTabId ? "active" : ""} ${dragId === tab.id ? "dragging" : ""} ${overId === tab.id && dragId && dragId !== tab.id ? "drag-over" : ""}`}
