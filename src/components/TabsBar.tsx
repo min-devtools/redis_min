@@ -87,7 +87,7 @@ export function TabsBar() {
             setDragId(null);
             setOverId(null);
           }}
-          title={conn ? `${tab.title} · ${conn.name}` : tab.kind === "key" ? "Double-click to rename · right-click for menu" : undefined}
+          title={conn && conn.name !== tab.title ? `${tab.title} · ${conn.name}` : tab.kind === "key" ? "Double-click to rename · right-click for menu" : undefined}
         >
           {conn && <span className="conn-dot" />}
           <Icon name={tab.icon} className={tab.iconClass} />
@@ -109,7 +109,10 @@ export function TabsBar() {
           ) : (
             <span>{tab.title}</span>
           )}
-          {conn && !editingId && <span className="tab-conn">{conn.name}</span>}
+          {conn && !editingId && conn.name !== tab.title && (
+            // a tab already titled after its owner would just repeat the name
+            <span className="tab-conn">{conn.name}</span>
+          )}
           <span
             className="tab-close"
             title={`Close ${tab.title} (⌘W)`}
