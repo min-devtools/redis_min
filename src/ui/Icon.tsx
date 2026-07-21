@@ -69,6 +69,7 @@ const ICONS = {
   braces: Braces,
   check: Check,
   "chevron-down": ChevronDown,
+  "chevron-right": ChevronRight,
   "chevron-up": ChevronUp,
   "chevrons-down": ChevronsDown,
   "chevrons-left": ChevronsLeft,

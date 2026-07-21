@@ -2,6 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useShallow } from "zustand/react/shallow";
 import { useApp } from "../store";
 import { useActiveConnection, useServerInfo } from "../lib/queries";
+import { UpdateBadge } from "../lib/updateCheck";
 
 export function Statusbar() {
   const conn = useActiveConnection();
@@ -45,6 +46,7 @@ export function Statusbar() {
         <span>{clients ? `${clients} clients` : ""}</span>
         <span>{activeTitle ?? ""}</span>
         <span>v{__APP_VERSION__}</span>
+        <UpdateBadge repo="min-devtools/redis_min" />
         <span
           className="credit"
           style={{ cursor: "pointer" }}
