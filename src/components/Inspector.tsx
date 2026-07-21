@@ -6,7 +6,7 @@ import { Kv } from "../ui/Kv";
 import { MiniTabs } from "../ui/MiniTabs";
 import { ToolButton } from "../ui/ToolButton";
 import { Icon } from "../ui/Icon";
-import { JsonView } from "../ui/JsonView";
+import { PayloadPanel } from "./inspector/PayloadPanel";
 import { CodeInput } from "../ui/CodeInput";
 import { FormRow } from "../ui/FormRow";
 import { useApp } from "../store";
@@ -296,20 +296,30 @@ export function Inspector() {
           {selectedKey && (
             <>
               {preview.isLoading && <div className="empty-note">Loading preview…</div>}
-              {preview.data !== undefined && <JsonView className="create-preview json-tree" value={preview.data ?? null} />}
-              <div className="seg" style={{ padding: "8px 12px", gap: 8 }}>
-                <ToolButton onClick={() => setPane("edit")}>
-                  <Icon name="braces" /> Edit value
-                </ToolButton>
-                <ToolButton
-                  onClick={async () => {
-                    await writeText(selectedKey.key);
-                    showToast("Copied", "Key name copied to clipboard.");
+              {preview.data !== undefined && (
+                <PayloadPanel
+                  value={preview.data ?? null}
+                  onCopy={async (text, label) => {
+                    await writeText(text);
+                    showToast("Copied", label);
                   }}
-                >
-                  <Icon name="copy" /> Copy name
-                </ToolButton>
-              </div>
+                />
+              )}
+              {!preview.isLoading && preview.data !== undefined && (
+                <div className="seg" style={{ padding: "8px 12px", gap: 8 }}>
+                  <ToolButton onClick={() => setPane("edit")}>
+                    <Icon name="braces" /> Edit value
+                  </ToolButton>
+                  <ToolButton
+                    onClick={async () => {
+                      await writeText(selectedKey.key);
+                      showToast("Copied", "Key name copied to clipboard.");
+                    }}
+                  >
+                    <Icon name="copy" /> Copy name
+                  </ToolButton>
+                </div>
+              )}
             </>
           )}
         </div>
